@@ -1,0 +1,125 @@
+id          = "theodotdot/plein-air"
+name        = "Plein Air"
+version     = "0.1.0"
+plugin_api  = 24
+author      = "theodotdot"
+license     = "MIT"
+icon        = "palette"
+description = "Wallpaper from public-domain paintings matching your weather, season and time of day, recolored to a palette."
+dependencies = ["plein-air", "plein-air-wallpaper", "jq", "lutgen (optional)"]
+
+[[setting]]
+key       = "location_mode"
+type      = "select"
+label_key = "settings.location_mode.label"
+default   = "ip"
+options = [
+  { value = "ip",     label_key = "settings.location_mode.options.ip" },
+  { value = "city",   label_key = "settings.location_mode.options.city" },
+  { value = "coords", label_key = "settings.location_mode.options.coords" },
+]
+
+[[setting]]
+key          = "city"
+type         = "string"
+label_key    = "settings.city.label"
+default      = ""
+visible_when = { key = "location_mode", values = ["city"] }
+
+[[setting]]
+key             = "coords"
+type            = "string"
+label_key       = "settings.coords.label"
+description_key = "settings.coords.description"
+default         = ""
+visible_when    = { key = "location_mode", values = ["coords"] }
+
+[[setting]]
+key             = "interval_minutes"
+type            = "int"
+label_key       = "settings.interval_minutes.label"
+description_key = "settings.interval_minutes.description"
+default         = 60
+min             = 0
+max             = 1440
+
+[[setting]]
+key             = "use_lutgen"
+type            = "bool"
+label_key       = "settings.use_lutgen.label"
+description_key = "settings.use_lutgen.description"
+default         = true
+
+[[setting]]
+key             = "palette"
+type            = "string"
+label_key       = "settings.palette.label"
+description_key = "settings.palette.description"
+default         = "catppuccin-macchiato"
+visible_when    = { key = "use_lutgen", values = ["true"] }
+
+[[setting]]
+key             = "contact"
+type            = "string"
+label_key       = "settings.contact.label"
+description_key = "settings.contact.description"
+default         = ""
+
+[[setting]]
+key       = "width"
+type      = "int"
+label_key = "settings.width.label"
+default   = 3840
+min       = 640
+max       = 7680
+advanced  = true
+
+[[setting]]
+key             = "lutgen_args"
+type            = "string"
+label_key       = "settings.lutgen_args.label"
+description_key = "settings.lutgen_args.description"
+default         = "-R -s 96 -n 8 -P -L 0.5"
+advanced        = true
+visible_when    = { key = "use_lutgen", values = ["true"] }
+
+[[setting]]
+key       = "directory"
+type      = "folder"
+label_key = "settings.directory.label"
+default   = "~/Downloads/walls/plein-air"
+advanced  = true
+
+[[service]]
+id    = "service"
+entry = "service.luau"
+
+[[widget]]
+id    = "widget"
+entry = "widget.luau"
+
+  [[widget.setting]]
+  key       = "show_text"
+  type      = "bool"
+  label_key = "settings.widget.show_text.label"
+  default   = false
+
+  [[widget.setting]]
+  key       = "max_chars"
+  type      = "int"
+  label_key = "settings.widget.max_chars.label"
+  default   = 32
+  min       = 8
+  max       = 80
+
+[[panel]]
+id                = "panel"
+entry             = "panel.luau"
+width             = 400
+height            = 360
+placement         = "attached"
+open_near_click   = true
+
+[[shortcut]]
+id    = "refresh"
+entry = "shortcut.luau"

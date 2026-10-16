@@ -1,0 +1,24 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Test downloads and partial files from plein-air
+*.part
+original.*
+wallpaper.*
+.current-a
+.current-b
+.run-status
+.run-log
+current.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Local secrets
+.env
+.env.*
