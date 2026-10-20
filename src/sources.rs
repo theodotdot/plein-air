@@ -3,9 +3,12 @@ use serde_json::Value;
 
 use crate::{
     ctx::Ctx,
-    net,
-    select::{Candidate, Painting, infer_depicts, select_by_content},
+    net::{self, ImgOpts},
+    select::{Candidate, Painting, has, infer_depicts, select_by_content},
 };
+
+mod museums;
+pub use museums::{paris, rijksmuseum, smk};
 
 pub const CURATED_URL: &str = "https://art.joonas.wtf/paintings.js";
 
@@ -33,7 +36,47 @@ fn join_strs(v: &Value) -> String {
         .unwrap_or_default()
 }
 
+fn localized_content(text: &str) -> String {
+    let text = strip_html(text).to_lowercase();
+    let mut words = vec![text.clone()];
+    for (pattern, english) in [
+        (r"\b(paysage|landschap|\p{L}*landskab(?:et|er|sstudie|sbillede)?)\b", "landscape"),
+        (r"\b(printemps|voorjaar|lente|forår|forårsdag)\b", "spring"),
+        (r"\b(été|zomer|sommer|sommerdag|sommerlandskab)\b", "summer"),
+        (r"\b(automne|herfst|efterår|efterårsdag)\b", "autumn"),
+        (r"\b(hiver|vinter|vinterlandskab|vinterdag)\b", "winter"),
+        (r"\b(neige|sneeuw|sne|snelandskab)\b", "snow"),
+        (r"\b(pluie|regen|regn|regnvejr)\b", "rain"),
+        (r"\b(tempête|onweer|stormvejr)\b", "storm"),
+        (r"\b(brouillard|brume|nevel|tåge|tåget)\b", "fog"),
+        (r"\b(nuage|nuages|wolken|skyer|skyet)\b", "clouds"),
+        (r"\b(soleil|zonlicht|solskin|sollys|solskinsdag)\b", "sunlight"),
+        (r"\b(nuit|nacht|nat)\b", "night"),
+        (r"\b(måneskin|maanlicht|clair de lune)\b", "moonlight night"),
+        (r"\b(aube|zonsopgang|solopgang|lever du soleil)\b", "sunrise dawn"),
+        (r"\b(crépuscule|zonsondergang|solnedgang|coucher du soleil)\b", "sunset dusk"),
+        (r"\b(soir|avond|aften|aftenstemning|aftenlandskab|aftenbillede)\b", "evening"),
+        (r"\b(matin|ochtend|morgen)\b", "morning"),
+        (r"\bmidi\b", "noon"),
+        (r"\b(après-midi|namiddag|eftermiddag)\b", "afternoon"),
+        (r"\b(mer|zee|havet|hav|marine|zeegezicht|søstykke)\b", "sea"),
+        (r"\b(rivière|fleuve|rivier|flod|floden|kanal)\b", "river"),
+        (r"\b(lac|meer|sø|søen)\b", "lake"),
+        (r"\b(montagne|montagnes|berglandschap|bjerglandskab|bjerge)\b", "mountain"),
+        (r"\b(forêt|bos|skov|skoven|skovparti)\b", "forest"),
+        (r"\b(jardin|tuin|have|haven)\b", "garden"),
+        (r"\b(plage|strand|kust|kyst|kystparti)\b", "coast"),
+        (r"\b(calligraphie|kalligrafie|kalligrafi)\b", "calligraphy"),
+    ] {
+        if has(pattern, &text) {
+            words.push(english.to_string());
+        }
+    }
+    words.join(" ")
+}
+
 fn ext_painting(title: &str, artist: &str, year: String, image: String, content: String, source: &str, key: String) -> Candidate {
+    let content = localized_content(&content);
     Candidate {
         painting: Painting {
             artist: if artist.is_empty() { "Unknown artist".into() } else { artist.into() },
@@ -48,6 +91,17 @@ fn ext_painting(title: &str, artist: &str, year: String, image: String, content:
         },
         content,
     }
+}
+
+fn public_domain_rights(rights: &str) -> bool {
+    let rights = rights.trim().trim_end_matches('/');
+    matches!(
+        rights,
+        "https://creativecommons.org/publicdomain/mark/1.0"
+            | "http://creativecommons.org/publicdomain/mark/1.0"
+            | "https://creativecommons.org/publicdomain/zero/1.0"
+            | "http://creativecommons.org/publicdomain/zero/1.0"
+    )
 }
 
 /// Site's query, then shorter ones: Met and Cleveland AND every term, so long queries starve.
@@ -96,7 +150,7 @@ fn first_with_hits<T>(ctx: &Ctx, min: usize, mut run: impl FnMut(&str) -> Result
     Ok(best)
 }
 
-pub fn met(ctx: &Ctx, _width: u32) -> Result<Vec<Painting>> {
+pub fn met(ctx: &Ctx, _opts: &ImgOpts) -> Result<Vec<Painting>> {
     // 11 European, 17 American, 21 Modern, 6 Asian; European weighted like the site.
     let dept = [11, 11, 11, 17, 17, 21, 6][fastrand::usize(0..7)].to_string();
     let mut ids = first_with_hits(ctx, 12, |q| {
@@ -151,7 +205,8 @@ pub fn met(ctx: &Ctx, _width: u32) -> Result<Vec<Painting>> {
     Ok(select_by_content(cands, ctx))
 }
 
-pub fn artic(ctx: &Ctx, width: u32) -> Result<Vec<Painting>> {
+pub fn artic(ctx: &Ctx, opts: &ImgOpts) -> Result<Vec<Painting>> {
+    let width = opts.width;
     let q = &search_queries(ctx)[0];
     // Combining two query[term] filters 400s now; filter type locally.
     let v = net::json(
@@ -195,7 +250,8 @@ pub fn artic(ctx: &Ctx, width: u32) -> Result<Vec<Painting>> {
     Ok(select_by_content(cands, ctx))
 }
 
-pub fn cleveland(ctx: &Ctx, width: u32) -> Result<Vec<Painting>> {
+pub fn cleveland(ctx: &Ctx, opts: &ImgOpts) -> Result<Vec<Painting>> {
+    let width = opts.width;
     let items = first_with_hits(ctx, 10, |q| {
         let v = net::json(
             "https://openaccess-api.clevelandart.org/api/artworks/",
@@ -239,7 +295,8 @@ fn wikimedia_category(ctx: &Ctx) -> &'static str {
     }
 }
 
-pub fn wikimedia(ctx: &Ctx, width: u32) -> Result<Vec<Painting>> {
+pub fn wikimedia(ctx: &Ctx, opts: &ImgOpts) -> Result<Vec<Painting>> {
+    let width = opts.width;
     const API: &str = "https://commons.wikimedia.org/w/api.php";
     let cat = wikimedia_category(ctx);
     let v = net::json(
@@ -332,13 +389,25 @@ pub fn curated_list() -> Result<Vec<Painting>> {
     Ok(serde_json::from_str(&js[start..=end]).context("paintings.js: parse")?)
 }
 
-pub type SourceFn = fn(&Ctx, u32) -> Result<Vec<Painting>>;
+pub type SourceFn = fn(&Ctx, &ImgOpts) -> Result<Vec<Painting>>;
 
-pub const EXTERNAL: &[(&str, SourceFn, u32)] = &[("met", met, 4), ("artic", artic, 5), ("cleveland", cleveland, 3), ("wikimedia", wikimedia, 2)];
+pub const EXTERNAL: &[(&str, SourceFn, u32)] = &[
+    ("met", met, 4),
+    ("artic", artic, 5),
+    ("cleveland", cleveland, 3),
+    ("wikimedia", wikimedia, 2),
+    ("smk", smk, 4),
+    ("rijksmuseum", rijksmuseum, 4),
+    ("paris", paris, 4),
+];
 
 /// Weighted shuffle of source order, mirroring the site.
 pub fn source_order(only: &[String]) -> Vec<(&'static str, SourceFn)> {
-    let mut pool: Vec<_> = EXTERNAL.iter().filter(|(n, _, _)| only.is_empty() || only.iter().any(|o| o == n)).collect();
+    let paris_available = std::env::var("PARIS_MUSEES_API").is_ok_and(|v| !v.trim().is_empty());
+    let mut pool: Vec<_> = EXTERNAL.iter()
+        .filter(|(n, _, _)| only.is_empty() || only.iter().any(|o| o == n))
+        .filter(|(n, _, _)| *n != "paris" || paris_available || only.iter().any(|o| o == "paris"))
+        .collect();
     let mut out = Vec::new();
     while !pool.is_empty() {
         let total: u32 = pool.iter().map(|(_, _, w)| w).sum();

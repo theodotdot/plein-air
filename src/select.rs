@@ -147,6 +147,8 @@ pub fn infer_depicts(title: &str, content: &str) -> Depicts {
         opt("desert")
     } else if h(r"\b(tropical|jungle|palm)\b") {
         opt("tropical")
+    } else if h(r"\b(landscape|landscapes)\b") {
+        opt("landscape")
     } else {
         None
     };
@@ -207,12 +209,19 @@ pub struct Candidate {
     pub content: String,
 }
 
+fn text_work(title: &str) -> bool {
+    has(r"(?i)\b(calligraphy|calligraphie|kalligrafie|kalligrafi|sutra|sutras|scripture|scriptures|manuscript|manuscripts)\b", title)
+}
+
 /// Drop candidates that clash with the moment, rank the rest, return the top 5 shuffled.
 pub fn select_by_content(cands: Vec<Candidate>, ctx: &Ctx) -> Vec<Painting> {
     let ctime = ctx.time;
     let mut scored: Vec<(i32, Painting)> = cands
         .into_iter()
         .filter_map(|c| {
+            if text_work(&c.painting.title) {
+                return None;
+            }
             let cls = classify_content(&c.content, ctx);
             if cls == Cls::Excluded {
                 return None;
@@ -270,6 +279,9 @@ pub fn select_by_content(cands: Vec<Candidate>, ctx: &Ctx) -> Vec<Painting> {
 
 /// Last gate: catches mismatches that only show up in the title or description.
 pub fn validate(p: &Painting, ctx: &Ctx) -> Result<(), String> {
+    if text_work(&p.title) {
+        return Err("text-focused work".to_string());
+    }
     let d = p.depicts.clone().unwrap_or_default();
     let f = |o: &Option<String>| o.clone().unwrap_or_default();
     let blob = [

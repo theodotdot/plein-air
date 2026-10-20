@@ -15,6 +15,8 @@
   "settings.contact.label": "Contact (email or URL)",
   "settings.contact.description": "Sent in the User-Agent. Wikimedia blocks requests without contact details, which breaks the fallback paintings.",
   "settings.width.label": "Image width (px)",
+  "settings.max_crop_percent.label": "Max crop loss (%)",
+  "settings.max_crop_percent.description": "Reject images that lose more than this area when filled into 16:9. Default: 35%.",
   "settings.lutgen_args.label": "lutgen flags",
   "settings.lutgen_args.description": "Interpolation flags passed to lutgen apply.",
   "settings.directory.label": "Download folder",

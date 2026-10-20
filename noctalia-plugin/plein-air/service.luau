@@ -33,7 +33,11 @@ local function setStatus(state, message)
 end
 
 local function command()
-  local args = { "plein-air-wallpaper", "--width", tostring(noctalia.getConfig("width") or 3840) }
+  local args = {
+    "plein-air-wallpaper",
+    "--width", tostring(noctalia.getConfig("width") or 3840),
+    "--max-crop-percent", tostring(noctalia.getConfig("max_crop_percent") or 35),
+  }
   local mode = noctalia.getConfig("location_mode")
   local city = noctalia.string.trim(noctalia.getConfig("city") or "")
   local coords = noctalia.string.trim(noctalia.getConfig("coords") or "")

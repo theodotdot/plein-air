@@ -35,14 +35,17 @@ struct Args {
     /// Requested image width in px.
     #[arg(long, default_value_t = 3840)]
     width: u32,
-    /// Reject images narrower than this. Default: width / 2.
+    /// Minimum usable width after 16:9 fill. Default: width / 2.
     #[arg(long)]
     min_width: Option<u32>,
     /// Allow portrait-oriented paintings.
     #[arg(long)]
     allow_portrait: bool,
-    /// Restrict external sources (met, artic, cleveland, wikimedia). Repeatable.
-    #[arg(long = "source", value_parser = ["met", "artic", "cleveland", "wikimedia"])]
+    /// Maximum image area lost to 16:9 fill, in percent.
+    #[arg(long, default_value_t = 35, value_parser = clap::value_parser!(u8).range(0..=100))]
+    max_crop_percent: u8,
+    /// Restrict external sources. Repeatable.
+    #[arg(long = "source", value_parser = ["met", "artic", "cleveland", "wikimedia", "smk", "rijksmuseum", "paris"])]
     sources: Vec<String>,
     /// Skip external sources; use only the curated set.
     #[arg(long)]
@@ -112,12 +115,13 @@ fn main() -> Result<()> {
         width: args.width,
         min_width: args.min_width.unwrap_or(args.width / 2),
         allow_portrait: args.allow_portrait,
+        max_crop_percent: args.max_crop_percent,
     };
     let recent = load_recent();
 
     // Try one candidate: final gate, then download (which checks size/orientation).
-    let attempt = |p: &Painting| -> Option<Vec<u8>> {
-        if recent.contains(&p.key()) {
+    let attempt = |p: &Painting, allow_recent: bool| -> Option<Vec<u8>> {
+        if !allow_recent && recent.contains(&p.key()) {
             log(format!("skip recent: {} — {}", p.artist, p.title));
             return None;
         }
@@ -136,7 +140,7 @@ fn main() -> Result<()> {
     let mut chosen: Option<(Painting, Vec<u8>)> = None;
     if !args.curated_only {
         'sources: for (name, fetch) in sources::source_order(&args.sources) {
-            let cands = match fetch(&ctx, opts.width) {
+            let cands = match fetch(&ctx, &opts) {
                 Ok(c) => c,
                 Err(e) => {
                     log(format!("{name}: {e:#}"));
@@ -145,7 +149,7 @@ fn main() -> Result<()> {
             };
             log(format!("{name}: {} candidates", cands.len()));
             for p in cands {
-                if let Some(bytes) = attempt(&p) {
+                if let Some(bytes) = attempt(&p, false) {
                     chosen = Some((p, bytes));
                     break 'sources;
                 }
@@ -161,11 +165,10 @@ fn main() -> Result<()> {
         // Curated scoring already penalizes recent picks, so allow them as a last resort.
         // Capped so a rate-limited host doesn't get hit 156 times.
         let order: Vec<_> = curated_order(&list, &ctx, &[]).into_iter().take(8).collect();
-        chosen = order.iter().find_map(|p| attempt(p).map(|b| (p.clone(), b)));
+        chosen = order.iter().find_map(|p| attempt(p, false).map(|b| (p.clone(), b)));
         if chosen.is_none() {
             chosen = order.into_iter().take(3).find_map(|p| {
-                let b = if args.dry_run { Some(Vec::new()) } else { net::image(&p.image, &opts).ok() };
-                b.map(|b| (p, b))
+                attempt(&p, true).map(|b| (p, b))
             });
         }
     }

@@ -84,6 +84,16 @@ advanced        = true
 visible_when    = { key = "use_lutgen", values = ["true"] }
 
 [[setting]]
+key             = "max_crop_percent"
+type            = "int"
+label_key       = "settings.max_crop_percent.label"
+description_key = "settings.max_crop_percent.description"
+default         = 35
+min             = 0
+max             = 100
+advanced        = true
+
+[[setting]]
 key       = "directory"
 type      = "folder"
 label_key = "settings.directory.label"
